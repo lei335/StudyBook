@@ -82,6 +82,46 @@ https://docs.celestia.org/nodes/light-node
 
 目前来看，celestia只是将rollup发布到celestia的交易进行merkle证明，blobstream对merkle根进行签名，中继器把证明和签名发送到EVM链上（以太坊）的blobstream合约中，EVM上的Layer2合约可以通过blobstream合约获得数据可用性证明（也就是交易数据的merkle根的签名）。
 
+### 架构
+
+目前分为**数据可用性层**以及**共识层**。
+
+数据可用性层包含**轻节点、全存储节点、桥节点**；
+
+* 轻节点：在Celestia的DA网络上执行数据可用性采样（DAS）;
+
+* 全存储节点：存储所有数据，不与共识网络交互；
+
+* 桥节点：连接数据可用性网络和共识网络。
+
+共识层包括**全共识节点、验证者节点**；
+
+* 全共识节点：在Celestia共识网络中同步区块链历史记录；
+
+* 验证者节点：Celestia的共识网络基于PoS权益证明，验证节点允许用户通过质押参与Celetisa网络中的共识。
+
+架构的核心是**数据可用性抽样（DAS）** 以及 **命名空间默克尔树（NMT）**。
+
+#### 数据可用性抽样
+
+![](reed-solomon-encoding.png)
+
+全存储节点存储所有的交易数据。
+
+轻节点无需下载整个块，只需下载区块的一部分数据就能够验证数据可用性。
+
+使用二维Reed-Solomon编码方案将$k\times k$的原始区块编码成$2k\times 2k$的区块，然后每一行每一列数据生成一个Merkle根，共生成4k个Merkle根，对这4k个Merkle根再生成一个总Merkle根。总Merkle根就是块头中的块数据承诺。
+
+轻节点随机选择一组坐标（$2k \times 2k$）进行采样，从全存储节点中下载相应坐标处的数据块以及对应的Merkle证明，如果轻节点收到有效响应，则很大概率保证整个区块的数据可用。
+
+只要轻节点一起采样足够多的数据份额（即至少$k\times k$个数据份额），那么完整的块就可以由诚实的全存储节点恢复。
+
+网络中的轻节点越多，它们可以共同下载和存储的数据就越多，这样就可以允许更大的区块。
+
+#### 命名空间默克尔树
+
+使Celestia上的执行层和结算层能够下载仅与其相关的交易。因为Celestia将块数据划分为多个命名空间，每个命名空间对应一个应用程序，每个应用程序只需要与他相关的块数据。
+
 ### OP+Celestia
 
 rollup sequencer（rollup 排序器）在Layer2中负责创建区块，之后将该数据写入celestia和以太坊。rollup全节点负责从celestia和以太坊读取该数据，并验证它是否遵循该rollup的协议规则。[Integrate with Blobstream client | Celestia Docs](https://docs.celestia.org/developers/blobstream-offchain)
